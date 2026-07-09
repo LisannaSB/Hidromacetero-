@@ -1,0 +1,72 @@
+:root {
+  /* --- Color tokens (paleta "Vivero nocturno") --- */
+  --soil-950: #16130d;
+  --soil-900: #201b13;
+  --soil-800: #2b2419;
+  --soil-700: #3a3122;
+  --leaf-500: #7fae5a;
+  --leaf-400: #9cc47c;
+  --leaf-300: #c3e0aa;
+  --water-500: #4d94a8;
+  --water-300: #9cd0dd;
+  --ochre-500: #d3a24c;
+  --ochre-300: #ecc784;
+  --clay-500: #c46a4d;
+  --paper-100: #f4efe2;
+  --paper-300: #d9d0ba;
+  --muted-500: #a79a80;
+
+  /* --- Type tokens --- */
+  --font-display: "Fraunces", "Iowan Old Style", serif;
+  --font-body: "Work Sans", -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius-md: 14px;
+  --radius-lg: 22px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at top left, var(--soil-800), var(--soil-950) 65%);
+  color: var(--paper-100);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--leaf-500);
+  color: var(--soil-950);
+}
+
+a {
+  color: var(--leaf-300);
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ochre-300);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

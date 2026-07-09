@@ -1,0 +1,31 @@
+.plant-illustration {
+  display: block;
+  transition: filter 0.6s ease;
+}
+
+.plant-illustration .plant-leaves {
+  transition: transform 0.8s ease;
+}
+
+.plant-illustration.is-wilted .plant-leaves {
+  transform: rotate(8deg) translateY(6px) scale(0.96);
+}
+
+.plant-illustration.is-wilted {
+  filter: saturate(0.75);
+}
+
+.plant-illustration.is-soaked .plant-leaves {
+  animation: sway 3.2s ease-in-out infinite;
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(-1.5deg); }
+  50% { transform: rotate(1.5deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plant-illustration.is-soaked .plant-leaves {
+    animation: none;
+  }
+}
