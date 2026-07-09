@@ -17,15 +17,26 @@ from dotenv import load_dotenv
 # nunca surtirian efecto.
 load_dotenv()
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.db_migrate import ensure_plant_sensor_column
 from app.routers import irrigation, plants, readings, sensors
+from app.scheduler import start_scheduler, stop_scheduler
 
 Base.metadata.create_all(bind=engine)
 ensure_plant_sensor_column(engine)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    stop_scheduler()
+
 
 app = FastAPI(
     title="HidroMacetero API",
@@ -35,6 +46,7 @@ app = FastAPI(
         "presion) para recomendar riego segun el perfil de la planta."
     ),
     version="0.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

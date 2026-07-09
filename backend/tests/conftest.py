@@ -8,6 +8,7 @@ dependan del hardware Dracal fisico.
 import os
 
 os.environ["SENSOR_MODE"] = "mock"
+os.environ["AUTO_SAVE_ENABLED"] = "false"
 
 import pytest
 from fastapi.testclient import TestClient

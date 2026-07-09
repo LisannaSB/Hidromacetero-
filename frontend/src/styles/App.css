@@ -435,6 +435,23 @@
   font-weight: 600;
 }
 
+.panel__caption--autosave {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.autosave-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--leaf-500);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(127, 174, 90, 0.18);
+}
+
 .chart-empty {
   color: var(--muted-500);
   text-align: center;

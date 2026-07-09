@@ -12,6 +12,36 @@ import "./styles/App.css";
 
 const POLL_MS = 8000;
 
+// Intervalo de guardado automatico configurado en el backend
+// (ver backend/.env.example, AUTO_SAVE_INTERVAL_MINUTES). No hay
+// endpoint que exponga este valor todavia, asi que se documenta aqui
+// en un solo lugar para facilitar el ajuste si eso cambia.
+const AUTO_SAVE_INTERVAL_MINUTES = 15;
+
+// Cada cuanto se recalcula el texto "hace X" en pantalla, para que no
+// quede congelado durante varios minutos entre renders del componente.
+const RELATIVE_TIME_REFRESH_MS = 30000;
+
+/// <summary>
+/// Formatea, en espanol, el tiempo transcurrido desde un timestamp ISO
+/// hasta ahora, en un formato relativo simple (minutos u horas).
+/// </summary>
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return "sin lecturas guardadas todavia";
+  const then = new Date(timestamp);
+  if (Number.isNaN(then.getTime())) return "sin lecturas guardadas todavia";
+
+  const diffMs = Date.now() - then.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin <= 0) return "hace menos de 1 min";
+  if (diffMin < 60) return `hace ${diffMin} min`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours === 1) return "hace 1 hora";
+  return `hace ${diffHours} horas`;
+}
+
 export default function App() {
   const [view, setView] = useState("dashboard"); // "dashboard" | "sensors"
   const [plants, setPlants] = useState([]);
@@ -22,11 +52,22 @@ export default function App() {
   const [watering, setWatering] = useState(false);
   const [loadingPlant, setLoadingPlant] = useState(true);
   const [error, setError] = useState(null);
+  const [, setRelativeTimeTick] = useState(0);
   const pollRef = useRef(null);
 
   useEffect(() => {
     bootstrap();
     return () => clearInterval(pollRef.current);
+  }, []);
+
+  // Fuerza un re-render periodico solo para refrescar el texto
+  // "hace X" del indicador de guardado automatico; no dispara ningun
+  // fetch adicional.
+  useEffect(() => {
+    const relativeTimeInterval = setInterval(() => {
+      setRelativeTimeTick((t) => t + 1);
+    }, RELATIVE_TIME_REFRESH_MS);
+    return () => clearInterval(relativeTimeInterval);
   }, []);
 
   async function bootstrap() {
@@ -105,6 +146,9 @@ export default function App() {
       setWatering(false);
     }
   }
+
+  const lastReading = readings.length > 0 ? readings[readings.length - 1] : null;
+  const lastReadingRelativeTime = formatRelativeTime(lastReading?.timestamp);
 
   async function handleSensorReassigned() {
     const updated = await api.listPlants();
@@ -213,6 +257,15 @@ export default function App() {
                       Guardar lectura actual
                     </button>
                   </div>
+                  <p className="panel__caption panel__caption--autosave">
+                    <span className="autosave-dot" aria-hidden="true" />
+                    Guardado automático cada {AUTO_SAVE_INTERVAL_MINUTES} min
+                    {lastReading ? (
+                      <> &middot; última lectura guardada {lastReadingRelativeTime}</>
+                    ) : (
+                      <> &middot; {lastReadingRelativeTime}</>
+                    )}
+                  </p>
                   <ReadingsChart readings={readings} />
                 </section>
 
