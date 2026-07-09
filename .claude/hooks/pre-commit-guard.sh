@@ -23,9 +23,20 @@ set -euo pipefail
 
 INPUT_JSON="$(cat)"
 
-# Extraer el comando de bash que se intenta ejecutar (requiere python3,
-# disponible en el entorno de desarrollo de este proyecto).
-COMMAND=$(echo "$INPUT_JSON" | python3 -c "
+# Detectar cual interprete de Python hay disponible: en Windows suele
+# existir solo "python", no "python3". Si no hay ninguno, no bloqueamos
+# el comando (no podemos inspeccionarlo, pero preferimos no romper el
+# flujo de trabajo del usuario por falta de una dependencia externa).
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN=python3
+elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN=python
+else
+    exit 0
+fi
+
+# Extraer el comando de bash que se intenta ejecutar.
+COMMAND=$(echo "$INPUT_JSON" | "$PYTHON_BIN" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)

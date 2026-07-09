@@ -29,11 +29,19 @@ presentar como "evidencia" algo que no ocurrio realmente.
    - Una captura de pantalla (opcional pero recomendable) en
      `evidence/screenshots/`.
 
-## Registro (completar con tu evidencia real)
+## Registro
 
-```
-Fecha:
-Accion realizada (issue / commit / PR):
-Link:
+Fecha: 9 de julio de 2026
+Accion realizada: Issue creado
+Link: https://github.com/LisannaSB/Hidromacetero-/issues/1
 Prompt usado en Claude Code:
-```
+  "Usa el MCP de GitHub para crear un issue en el repositorio
+  LisannaSB/Hidromacetero- titulado 'Agregar sensor capacitivo de
+  suelo' con esta descripcion: El Dracal VCP-PTH450-CAL mide humedad
+  relativa del aire, no humedad directa del sustrato/tierra. Para una
+  medicion mas precisa de cuando regar, se recomendaria integrar un
+  sensor capacitivo de suelo como entrada adicional, manteniendo la
+  logica actual como fallback."
+
+Conexion verificada con `claude mcp list` antes de ejecutar la accion:
+  github: https://api.githubcopilot.com/mcp (HTTP) - ✔ Connected
