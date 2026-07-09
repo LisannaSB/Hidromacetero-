@@ -6,6 +6,8 @@ escribieron ANTES de que existiera app/scheduler.py, para guiar el
 guardado automatico y periodico de lecturas (APScheduler corriendo
 dentro de la app FastAPI).
 """
+from datetime import datetime, timezone
+
 import pytest
 
 from app import scheduler
@@ -71,3 +73,26 @@ def test_start_scheduler_enabled_starts_and_stops(monkeypatch):
 
     scheduler.stop_scheduler()
     assert scheduler._scheduler is None
+
+
+def test_start_scheduler_first_run_is_not_immediate(monkeypatch):
+    """
+    Regresion del bug: sin next_run_time explicito, APScheduler dispara la
+    primera corrida de inmediato al arrancar (o al reiniciar el proceso con
+    uvicorn --reload), generando lecturas casi-duplicadas. La primera
+    corrida debe respetar el intervalo configurado.
+    """
+    monkeypatch.setenv("AUTO_SAVE_ENABLED", "true")
+    monkeypatch.setenv("AUTO_SAVE_INTERVAL_MINUTES", "1")
+    scheduler.start_scheduler()
+
+    job = scheduler._scheduler.get_job(scheduler.JOB_ID)
+    assert job is not None
+    next_run = job.next_run_time
+
+    now = datetime.now(next_run.tzinfo) if next_run.tzinfo else datetime.now()
+    seconds_until_first_run = (next_run - now).total_seconds()
+
+    # ~60s de intervalo configurado; toleramos margen pero exigimos que NO
+    # sea practicamente inmediato (bug original disparaba en <1s).
+    assert seconds_until_first_run >= 50

@@ -144,6 +144,133 @@ sobre TODA la suite:
 Los 45 tests (los 24 previos + 17 nuevos de `test_scheduler.py` + 4
 nuevos de `test_auto_save.py`) pasan sin romper nada existente.
 
+## Tercer ciclo: primera corrida del scheduler no debe ser inmediata
+
+Problema reportado: `start_scheduler()` registraba el job de APScheduler
+con `add_job(..., minutes=interval, ...)` sin pasar `next_run_time`
+explicito. La preocupacion es que, sin ese parametro, la primera
+ejecucion del job podria disparar de inmediato al arrancar (o en cada
+reinicio de `uvicorn --reload` durante desarrollo), generando lecturas
+casi-duplicadas para cada planta antes de esperar el intervalo completo.
+
+### Nota de honestidad sobre la reproduccion del bug
+
+Antes de aplicar el fix, se probo empiricamente el comportamiento
+default de `IntervalTrigger` (APScheduler 3.10.4, Windows) con el mismo
+patron de codigo (`add_job(...)` seguido de `.start()` en la misma
+llamada sincrona). En 30 corridas de prueba, la primera ejecucion
+quedo programada consistentemente a `interval` completo despues del
+arranque (`min diff: 60.0s`, `max diff: 60.001s` para un intervalo de 1
+minuto), no de inmediato. Esto se debe a que `IntervalTrigger` usa
+`start_date` (fijado en el momento de `add_job`) y calcula el primer
+`next_run_time` cuando el scheduler arranca unos milisegundos despues,
+cayendo en la rama `ceil(timediff/interval) = 1` en vez de `0`. En
+teoria existe una ventana de carrera (si `timediff_seconds` fuera
+exactamente `0.0`) que si dispararia de inmediato, pero no se logro
+reproducir de forma determinista en este entorno.
+
+De cualquier forma, el fix pedido —pasar `next_run_time` explicito,
+calculado como `datetime.now() + timedelta(minutes=interval)` dentro de
+`start_scheduler()`— es la solucion correcta independientemente de si
+el bug se reproduce siempre: elimina cualquier ambiguedad/race
+condition sobre cuando dispara la primera corrida, la hace determinista
+y explicita en el codigo y en el log, y no depende de la resolucion del
+reloj del sistema operativo.
+
+### Paso 1 — Test que confirma el comportamiento esperado
+
+Se agrego `test_start_scheduler_first_run_is_not_immediate` en
+`backend/tests/test_scheduler.py`: arranca el scheduler con
+`AUTO_SAVE_INTERVAL_MINUTES=1` y verifica que
+`scheduler._scheduler.get_job(scheduler.JOB_ID).next_run_time` este al
+menos 50 segundos en el futuro respecto a `datetime.now()`.
+
+Como se documento arriba, este test ya pasaba con el codigo previo (sin
+`next_run_time` explicito) en este entorno, porque el bug no se
+reprodujo de forma determinista aqui. Aun asi queda como regresion
+permanente: valida el comportamiento correcto y documentado, y
+protegeria contra una regresion futura donde alguien cambie el trigger
+a un patron que si dispare de inmediato (por ejemplo, si el scheduler ya
+esta corriendo cuando se llama `add_job`).
+
+### Paso 2 — Fix aplicado
+
+En `backend/app/scheduler.py`, dentro de `start_scheduler()`:
+
+```python
+interval = _interval_minutes()
+first_run = datetime.now() + timedelta(minutes=interval)
+_scheduler = BackgroundScheduler()
+_scheduler.add_job(
+    save_readings_for_all_plants,
+    "interval",
+    minutes=interval,
+    id=JOB_ID,
+    replace_existing=True,
+    max_instances=1,
+    coalesce=True,
+    misfire_grace_time=60,
+    next_run_time=first_run,
+)
+_scheduler.start()
+logger.info(
+    "Guardado automatico iniciado: cada %s minuto(s); primera corrida a las %s.",
+    interval,
+    first_run,
+)
+```
+
+`first_run` se recalcula en cada llamada a `start_scheduler()`, asi que
+cubre tambien los reinicios de `uvicorn --reload` (cada reinicio del
+proceso vuelve a esperar el intervalo completo antes de la primera
+corrida).
+
+### Paso 3 — Verde: suite completa
+
+Salida real de `pytest backend/tests/test_scheduler.py -q`:
+
+```
+..................                                                       [100%]
+18 passed, 1 warning in 0.10s
+```
+
+Salida real de `pytest -q` (toda la suite, corrida desde `backend/`):
+
+```
+.................................................                        [100%]
+49 passed, 2 warnings in 1.54s
+```
+
+### Verificacion en vivo (~70s de espera real)
+
+Se escribio un script standalone (fuera del repo, en el scratchpad de
+la sesion, **no comiteado**) que: aisla una base SQLite en memoria
+propia (`StaticPool`, igual patron que `tests/conftest.py::db_session`)
+sin tocar `backend/hidromacetero.db` ni el proceso real del usuario,
+crea una planta de prueba, arranca `scheduler.start_scheduler()` con
+`AUTO_SAVE_INTERVAL_MINUTES=1`, verifica el estado inmediatamente
+despues, espera 65 segundos reales, y vuelve a verificar.
+
+Salida real obtenida:
+
+```
+[2026-07-09 15:40:05.160935] Planta de prueba creada: id=1
+[2026-07-09 15:40:05.160935] scheduler.start_scheduler() llamado (AUTO_SAVE_INTERVAL_MINUTES=1, AUTO_SAVE_ENABLED=true)
+[2026-07-09 15:40:05.179935] Readings para la planta INMEDIATAMENTE despues de start_scheduler(): 0 (esperado: 0)
+[2026-07-09 15:40:05.179935] job.next_run_time = 2026-07-09 15:41:05.160935-04:00 (faltan ~60.0s)
+[2026-07-09 15:40:05.179935] Esperando 65s reales a que dispare el job...
+[2026-07-09 15:41:10.182065] Readings para la planta DESPUES de esperar 65s: 1 (esperado: 1)
+    Reading id=1 timestamp=2026-07-09 19:41:05.182396 temp=23.8 hum=55.37 pres=1013.19
+[2026-07-09 15:41:10.182065] Diferencia total entre start_scheduler() y la lectura confirmada: 65.0s
+[2026-07-09 15:41:10.182603] scheduler.stop_scheduler() llamado. Verificacion OK.
+```
+
+Cero lecturas antes del intervalo, exactamente una lectura nueva
+generada por el job despues de esperar el intervalo completo (a los
+~60s, dentro de la ventana de 65s de espera), confirmando que la
+primera corrida respeta `AUTO_SAVE_INTERVAL_MINUTES` y no dispara de
+inmediato.
+
 ## Como reproducir tu propio ciclo TDD con Claude Code
 
 Para que tu entrega tenga tu propia evidencia generada en vivo con la

@@ -10,6 +10,9 @@ node_modules/
 dist/
 .vite/
 
+# Artefactos generados por Playwright MCP (snapshots, logs de consola)
+.playwright-mcp/
+
 # Env
 .env
 
