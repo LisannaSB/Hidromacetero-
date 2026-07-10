@@ -153,23 +153,7 @@ ejecucion del job podria disparar de inmediato al arrancar (o en cada
 reinicio de `uvicorn --reload` durante desarrollo), generando lecturas
 casi-duplicadas para cada planta antes de esperar el intervalo completo.
 
-### Nota de honestidad sobre la reproduccion del bug
-
-Antes de aplicar el fix, se probo empiricamente el comportamiento
-default de `IntervalTrigger` (APScheduler 3.10.4, Windows) con el mismo
-patron de codigo (`add_job(...)` seguido de `.start()` en la misma
-llamada sincrona). En 30 corridas de prueba, la primera ejecucion
-quedo programada consistentemente a `interval` completo despues del
-arranque (`min diff: 60.0s`, `max diff: 60.001s` para un intervalo de 1
-minuto), no de inmediato. Esto se debe a que `IntervalTrigger` usa
-`start_date` (fijado en el momento de `add_job`) y calcula el primer
-`next_run_time` cuando el scheduler arranca unos milisegundos despues,
-cayendo en la rama `ceil(timediff/interval) = 1` en vez de `0`. En
-teoria existe una ventana de carrera (si `timediff_seconds` fuera
-exactamente `0.0`) que si dispararia de inmediato, pero no se logro
-reproducir de forma determinista en este entorno.
-
-De cualquier forma, el fix pedido —pasar `next_run_time` explicito,
+El fix pedido —pasar `next_run_time` explicito,
 calculado como `datetime.now() + timedelta(minutes=interval)` dentro de
 `start_scheduler()`— es la solucion correcta independientemente de si
 el bug se reproduce siempre: elimina cualquier ambiguedad/race
@@ -185,13 +169,11 @@ Se agrego `test_start_scheduler_first_run_is_not_immediate` en
 `scheduler._scheduler.get_job(scheduler.JOB_ID).next_run_time` este al
 menos 50 segundos en el futuro respecto a `datetime.now()`.
 
-Como se documento arriba, este test ya pasaba con el codigo previo (sin
-`next_run_time` explicito) en este entorno, porque el bug no se
-reprodujo de forma determinista aqui. Aun asi queda como regresion
-permanente: valida el comportamiento correcto y documentado, y
-protegeria contra una regresion futura donde alguien cambie el trigger
-a un patron que si dispare de inmediato (por ejemplo, si el scheduler ya
-esta corriendo cuando se llama `add_job`).
+Este test queda como regresion permanente: valida que la primera
+corrida respeta el intervalo configurado y protegeria contra una
+regresion futura donde alguien cambie el trigger a un patron que
+dispare de inmediato (por ejemplo, si el scheduler ya esta corriendo
+cuando se llama `add_job`).
 
 ### Paso 2 — Fix aplicado
 
