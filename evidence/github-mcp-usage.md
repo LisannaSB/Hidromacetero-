@@ -1,9 +1,6 @@
 # Evidencia: GitHub MCP Integration
 
-Tema 6 de la asignacion (Curso 2). **Esta pieza requiere una accion real
-en tu cuenta de GitHub y no puede generarse dentro de este entorno de
-scaffolding** — no se fabrico ningun log falso aqui a proposito, para no
-presentar como "evidencia" algo que no ocurrio realmente.
+Tema 6 de la asignacion (Curso 2). 
 
 ## Que hacer (5-10 minutos)
 
